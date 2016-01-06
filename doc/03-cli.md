@@ -299,6 +299,7 @@ php composer.phar show monolog/monolog 1.0.2
 * **--installed (-i):** List the packages that are installed.
 * **--platform (-p):** List only platform packages (php & extensions).
 * **--self (-s):** List the root package info.
+* **--tree (-t):** List the dependencies as a tree. Only usable when giving a single package name or combined with `-i`.
 
 ## browse / home
 
@@ -330,11 +331,11 @@ should be included in the listing. By default both are used.
 ```sh
 php composer.phar depends --link-type=require monolog/monolog
 
-nrk/monolog-fluent
-poc/poc
-propel/propel
-symfony/monolog-bridge
-symfony/symfony
+nrk/monolog-fluent requires monolog/monolog (~1.8)
+poc/poc requires monolog/monolog (^1.6)
+propel/propel requires monolog/monolog (1.*)
+symfony/monolog-bridge requires monolog/monolog (>=1.2)
+symfony/symfony requires monolog/monolog (~1)
 ```
 
 ### Options
@@ -692,5 +693,9 @@ This env var controls the [`discard-changes`](06-config.md#discard-changes) conf
 
 If set to 1, this env var will make Composer behave as if you passed the
 `--no-interaction` flag to every command. This can be set on build boxes/CI.
+
+### COMPOSER_DISABLE_XDEBUG_WARN
+
+If set to 1, this env disables the warning about having xdebug enabled.
 
 &larr; [Libraries](02-libraries.md)  |  [Schema](04-schema.md) &rarr;

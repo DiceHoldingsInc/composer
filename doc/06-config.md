@@ -126,6 +126,11 @@ autoloader. When null a random one will be generated.
 
 Defaults to `false`. If `true`, always optimize when dumping the autoloader.
 
+## sort-packages
+
+Defaults to `false`. If `true`, the `require` command keeps packages sorted
+by name in `composer.json` when adding a new package.
+
 ## classmap-authoritative
 
 Defaults to `false`. If `true`, the Composer autoloader will only load classes
@@ -140,6 +145,11 @@ used for GitHub Enterprise setups.
 
 Defaults to `true`. If `false`, the OAuth tokens created to access the
 github API will have a date instead of the machine hostname.
+
+## gitlab-domains
+
+Defaults to `["gitlab.com"]`. A list of domains of GitLab servers.
+This is used if you use the `gitlab` repository type.
 
 ## notify-on-install
 

@@ -90,6 +90,29 @@ Set up a virtual-host that points to that `web/` directory, let's say it is
 `packages.example.org`. Alternatively, with PHP >= 5.4.0, you can use the built-in
 CLI server `php -S localhost:port -t satis-output-dir/` for a temporary solution.
 
+### Partial Updates
+
+You can tell Satis to selectively update only particular packages or process only 
+a repository with a given URL. This cuts down the time it takes to rebuild the 
+`package.json` file and is helpful if you use (custom) webhooks to trigger rebuilds 
+whenever code is pushed into one of your repositories.
+
+To rebuild only particular packages, pass the package names on the command line like
+so:
+```
+php bin/satis build satis.json web/ this/package that/other-package
+```
+
+Note that
+this will still need to pull and scan all of your VCS repositories because any VCS 
+repository might contain (on any branch) one of the selected packages.
+
+If you want to scan only a single repository and update all packages found in it, 
+pass the VCS repository URL as an optional argument: 
+```
+php bin/satis build --repository-url https://only.my/repo.git satis.json web/
+```
+
 ## Usage
 
 In your projects all you need to add now is your own composer repository using
@@ -220,10 +243,14 @@ following to your `satis.json`:
 
 #### Options explained
 
- * `directory`: the location of the dist files (inside the `output-dir`)
+ * `directory`: required, the location of the dist files (inside the `output-dir`)
  * `format`: optional, `zip` (default) or `tar`
  * `prefix-url`: optional, location of the downloads, homepage (from `satis.json`) followed by `directory` by default
  * `skip-dev`: optional, `false` by default, when enabled (`true`) satis will not create downloads for branches
+ * `absolute-directory`: optional, a _local_ directory where the dist files are dumped instead of `output-dir`/`directory`
+ * `whitelist`: optional, if set as a list of package names, satis will only dump the dist files of these packages
+ * `blacklist`: optional, if set as a list of package names, satis will not dump the dist files of these packages
+ * `checksum`: optional, `true` by default, when disabled (`false`) satis will not provide the sha1 checksum for the dist files
 
 Once enabled, all downloads (include those from GitHub and BitBucket) will be replaced with a _local_ version.
 
@@ -235,6 +262,28 @@ bucket or on a CDN host. A CDN would drastically improve download times and ther
 Example: A `prefix-url` of `https://my-bucket.s3.amazonaws.com` (and `directory` set to `dist`) creates download URLs
 which look like the following: `https://my-bucket.s3.amazonaws.com/dist/vendor-package-version-ref.zip`.
 
+### Web outputs
+
+ * `output-html`: optional, `true` by default, when disabled (`false`) satis will not generate the `output-dir`/index.html page.
+ * `twig-template`: optional, a path to a personalized [Twig](http://twig.sensiolabs.org/) template for the `output-dir`/index.html page.
+
+### Abandoned packages
+
+To enable your satis installation to indicate that some packages are abandoned, add the following to your `satis.json`:
+
+```json
+{
+    "abandoned": {
+        "company/package": true,
+        "company/package2": "company/newpackage"
+    }
+}
+```
+
+The `true` value indicates that the package is truly abandoned while the `"company/newpackage"` value specifies that the package is replaced by
+the `company/newpackage` package.
+
+Note that all packages set as abandoned in their own `composer.json` file will be marked abandoned as well.
 
 ### Resolving dependencies
 
@@ -253,3 +302,11 @@ When searching for packages, satis will attempt to resolve all the required pack
 Therefore, if you are requiring a package from Packagist, you will need to define it in your `satis.json`.
 
 Dev dependencies are packaged only if the `require-dev-dependencies` parameter is set to true.
+
+### Other options
+
+ * `output-dir`: optional, defines where to output the repository files
+   if not provided as an argument when calling the `build` command.
+ * `config`: optional, lets you define all config options from composer, except `archive-format` and `archive-dir` as the configuration is done through [archive](#downloads) instead. See
+   (http://getcomposer.org/doc/04-schema.md#config)
+ * `notify-batch`: optional, specify a URL that will be called every time a user installs a package. See (https://getcomposer.org/doc/05-repositories.md#notify-batch)

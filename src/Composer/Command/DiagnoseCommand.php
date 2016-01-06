@@ -141,11 +141,11 @@ EOT
     private function checkComposerSchema()
     {
         $validator = new ConfigValidator($this->getIO());
-        list($errors, $publishErrors, $warnings) = $validator->validate(Factory::getComposerFile());
+        list($errors, , $warnings) = $validator->validate(Factory::getComposerFile());
 
-        if ($errors || $publishErrors || $warnings) {
+        if ($errors || $warnings) {
             $messages = array(
-                'error' => array_merge($errors, $publishErrors),
+                'error' => $errors,
                 'warning' => $warnings,
             );
 
@@ -312,7 +312,7 @@ EOT
         $latest = trim($this->rfs->getContents('getcomposer.org', $protocol . '://getcomposer.org/version', false));
 
         if (Composer::VERSION !== $latest && Composer::VERSION !== '@package_version@') {
-            return '<comment>You are not running the latest version</comment>';
+            return '<comment>You are not running the latest version, run `composer self-update` to update</comment>';
         }
 
         return true;

@@ -200,3 +200,20 @@ simply running `composer test`:
 
 > **Note:** Composer's bin-dir is pushed on top of the PATH so that binaries
 > of dependencies are easily accessible as CLI commands when writing scripts.
+
+## Referencing scripts
+
+To enable script re-use and avoid duplicates, you can call a script from another
+one by prefixing the command name with `@`:
+
+```json
+{
+    "scripts": {
+        "test": [
+            "@clearCache",
+            "phpunit"
+        ],
+        "clearCache": "rm -rf cache/*"
+    }
+}
+```

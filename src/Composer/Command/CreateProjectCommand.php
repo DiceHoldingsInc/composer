@@ -112,6 +112,7 @@ EOT
         return $this->installProject(
             $io,
             $config,
+            $input,
             $input->getArgument('package'),
             $input->getArgument('directory'),
             $input->getArgument('version'),
@@ -125,12 +126,11 @@ EOT
             $input->getOption('keep-vcs'),
             $input->getOption('no-progress'),
             $input->getOption('no-install'),
-            $input->getOption('ignore-platform-reqs'),
-            $input
+            $input->getOption('ignore-platform-reqs')
         );
     }
 
-    public function installProject(IOInterface $io, Config $config, $packageName, $directory = null, $packageVersion = null, $stability = 'stable', $preferSource = false, $preferDist = false, $installDevPackages = false, $repositoryUrl = null, $disablePlugins = false, $noScripts = false, $keepVcs = false, $noProgress = false, $noInstall = false, $ignorePlatformReqs = false, InputInterface $input)
+    public function installProject(IOInterface $io, Config $config, InputInterface $input, $packageName, $directory = null, $packageVersion = null, $stability = 'stable', $preferSource = false, $preferDist = false, $installDevPackages = false, $repositoryUrl = null, $disablePlugins = false, $noScripts = false, $keepVcs = false, $noProgress = false, $noInstall = false, $ignorePlatformReqs = false)
     {
         $oldCwd = getcwd();
 
@@ -281,7 +281,7 @@ EOT
 
         // find the latest version if there are multiple
         $versionSelector = new VersionSelector($pool);
-        $package = $versionSelector->findBestCandidate($name, $packageVersion, $phpVersion);
+        $package = $versionSelector->findBestCandidate($name, $packageVersion, $phpVersion, $stability);
 
         if (!$package) {
             throw new \InvalidArgumentException("Could not find package $name" . ($packageVersion ? " with version $packageVersion." : " with stability $stability."));

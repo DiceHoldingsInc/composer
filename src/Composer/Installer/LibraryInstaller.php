@@ -18,7 +18,6 @@ use Composer\Repository\InstalledRepositoryInterface;
 use Composer\Package\PackageInterface;
 use Composer\Util\Filesystem;
 use Composer\Util\ProcessExecutor;
-use Composer\Util\Symlink;
 
 /**
  * Package installation manager.
@@ -141,16 +140,33 @@ class LibraryInstaller implements InstallerInterface
      */
     public function getInstallPath(PackageInterface $package)
     {
-        $targetDir = $package->getTargetDir();
-
-        return $this->getPackageBasePath($package) . ($targetDir ? '/'.$targetDir : '');
-    }
-
-    protected function getPackageBasePath(PackageInterface $package)
-    {
         $this->initializeVendorDir();
 
-        return ($this->vendorDir ? $this->vendorDir.'/' : '') . $package->getPrettyName();
+        $basePath = ($this->vendorDir ? $this->vendorDir.'/' : '') . $package->getPrettyName();
+        $targetDir = $package->getTargetDir();
+
+        return $basePath . ($targetDir ? '/'.$targetDir : '');
+    }
+
+    /**
+     * Returns the base path of the package without target-dir path
+     *
+     * It is used for BC as getInstallPath tends to be overriden by
+     * installer plugins but not getPackageBasePath
+     *
+     * @param  PackageInterface $package
+     * @return string
+     */
+    protected function getPackageBasePath(PackageInterface $package)
+    {
+        $installPath = $this->getInstallPath($package);
+        $targetDir = $package->getTargetDir();
+
+        if ($targetDir) {
+            return preg_replace('{/*'.str_replace('/', '/+', preg_quote($targetDir)).'/?$}', '', $installPath);
+        }
+
+        return $installPath;
     }
 
     protected function installCode(PackageInterface $package)

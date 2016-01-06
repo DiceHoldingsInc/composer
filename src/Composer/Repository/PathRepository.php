@@ -16,6 +16,7 @@ use Composer\Config;
 use Composer\IO\IOInterface;
 use Composer\Json\JsonFile;
 use Composer\Package\Loader\ArrayLoader;
+use Composer\Package\Locker;
 use Composer\Package\Version\VersionGuesser;
 use Composer\Semver\VersionParser;
 use Composer\Util\ProcessExecutor;
@@ -48,7 +49,7 @@ use Composer\Util\ProcessExecutor;
  * @author Samuel Roze <samuel.roze@gmail.com>
  * @author Johann Reinke <johann.reinke@gmail.com>
  */
-class PathRepository extends ArrayRepository
+class PathRepository extends ArrayRepository implements ConfigurableRepositoryInterface
 {
     /**
      * @var ArrayLoader
@@ -64,6 +65,11 @@ class PathRepository extends ArrayRepository
      * @var string
      */
     private $url;
+
+    /**
+     * @var array
+     */
+    private $repoConfig;
 
     /**
      * @var ProcessExecutor
@@ -87,8 +93,14 @@ class PathRepository extends ArrayRepository
         $this->url = $repoConfig['url'];
         $this->process = new ProcessExecutor($io);
         $this->versionGuesser = new VersionGuesser($config, $this->process, new VersionParser());
+        $this->repoConfig = $repoConfig;
 
         parent::__construct();
+    }
+
+    public function getRepoConfig()
+    {
+        return $this->repoConfig;
     }
 
     /**
@@ -121,6 +133,8 @@ class PathRepository extends ArrayRepository
             }
             if (is_dir($path.'/.git') && 0 === $this->process->execute('git log -n1 --pretty=%H', $output, $path)) {
                 $package['dist']['reference'] = trim($output);
+            } else {
+                $package['dist']['reference'] = Locker::getContentHash($json);
             }
 
             $package = $this->loader->load($package);

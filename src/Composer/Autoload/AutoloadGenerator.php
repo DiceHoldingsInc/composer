@@ -48,6 +48,11 @@ class AutoloadGenerator
      */
     private $classMapAuthoritative = false;
 
+    /**
+     * @var bool
+     */
+    private $runScripts = false;
+
     public function __construct(EventDispatcher $eventDispatcher, IOInterface $io = null)
     {
         $this->eventDispatcher = $eventDispatcher;
@@ -70,15 +75,27 @@ class AutoloadGenerator
         $this->classMapAuthoritative = (boolean) $classMapAuthoritative;
     }
 
+    /**
+     * Set whether to run scripts or not
+     *
+     * @param bool $runScripts
+     */
+    public function setRunScripts($runScripts = true)
+    {
+        $this->runScripts = (boolean) $runScripts;
+    }
+
     public function dump(Config $config, InstalledRepositoryInterface $localRepo, PackageInterface $mainPackage, InstallationManager $installationManager, $targetDir, $scanPsr0Packages = false, $suffix = '')
     {
         if ($this->classMapAuthoritative) {
             // Force scanPsr0Packages when classmap is authoritative
             $scanPsr0Packages = true;
         }
-        $this->eventDispatcher->dispatchScript(ScriptEvents::PRE_AUTOLOAD_DUMP, $this->devMode, array(), array(
-            'optimize' => (bool) $scanPsr0Packages,
-        ));
+        if ($this->runScripts) {
+            $this->eventDispatcher->dispatchScript(ScriptEvents::PRE_AUTOLOAD_DUMP, $this->devMode, array(), array(
+                'optimize' => (bool) $scanPsr0Packages,
+            ));
+        }
 
         $filesystem = new Filesystem();
         $filesystem->ensureDirectoryExists($config->get('vendor-dir'));
@@ -220,11 +237,6 @@ EOF;
                         if (!is_dir($dir)) {
                             continue;
                         }
-//                        $whitelist = sprintf(
-//                            '{%s/%s.+$}',
-//                            preg_quote($dir),
-//                            ($psrType === 'psr-0' && strpos($namespace, '_') === false) ? preg_quote(strtr($namespace, '\\', '/')) : ''
-//                        );
 
                         $namespaceFilter = $namespace === '' ? null : $namespace;
                         $classMap = $this->addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $blacklist, $namespaceFilter, $classMap);
@@ -277,9 +289,11 @@ EOF;
         $this->safeCopy(__DIR__.'/ClassLoader.php', $targetDir.'/ClassLoader.php');
         $this->safeCopy(__DIR__.'/../../../LICENSE', $targetDir.'/LICENSE');
 
-        $this->eventDispatcher->dispatchScript(ScriptEvents::POST_AUTOLOAD_DUMP, $this->devMode, array(), array(
-            'optimize' => (bool) $scanPsr0Packages,
-        ));
+        if ($this->runScripts) {
+            $this->eventDispatcher->dispatchScript(ScriptEvents::POST_AUTOLOAD_DUMP, $this->devMode, array(), array(
+                'optimize' => (bool) $scanPsr0Packages,
+            ));
+        }
     }
 
     private function addClassMapCode($filesystem, $basePath, $vendorPath, $dir, $blacklist = null, $namespaceFilter = null, array $classMap = array())
@@ -374,7 +388,7 @@ EOF;
             'psr-4' => $psr4,
             'classmap' => $classmap,
             'files' => $files,
-            'exclude-from-classmap' => $exclude
+            'exclude-from-classmap' => $exclude,
         );
     }
 
@@ -456,8 +470,9 @@ EOF;
     protected function getIncludeFilesFile(array $files, Filesystem $filesystem, $basePath, $vendorPath, $vendorPathCode, $appBaseDirCode)
     {
         $filesCode = '';
-        foreach ($files as $functionFile) {
-            $filesCode .= '    '.$this->getPathCode($filesystem, $basePath, $vendorPath, $functionFile).",\n";
+        foreach ($files as $fileIdentifier => $functionFile) {
+            $filesCode .= '    ' . var_export($fileIdentifier, true) . ' => '
+                . $this->getPathCode($filesystem, $basePath, $vendorPath, $functionFile) . ",\n";
         }
 
         if (!$filesCode) {
@@ -524,13 +539,6 @@ AUTOLOAD;
 
     protected function getAutoloadRealFile($useClassMap, $useIncludePath, $targetDirLoader, $useIncludeFiles, $vendorPathCode, $appBaseDirCode, $suffix, $useGlobalIncludePath, $prependAutoloader)
     {
-        // TODO the class ComposerAutoloaderInit should be revert to a closure
-        // when APC has been fixed:
-        // - https://github.com/composer/composer/issues/959
-        // - https://bugs.php.net/bug.php?id=52144
-        // - https://bugs.php.net/bug.php?id=61576
-        // - https://bugs.php.net/bug.php?id=59298
-
         $file = <<<HEADER
 <?php
 
@@ -614,11 +622,11 @@ INCLUDEPATH;
         }
 
         if ($targetDirLoader) {
-            $file .= <<<REGISTER_AUTOLOAD
+            $file .= <<<REGISTER_TARGET_DIR_AUTOLOAD
         spl_autoload_register(array('ComposerAutoloaderInit$suffix', 'autoload'), true, true);
 
 
-REGISTER_AUTOLOAD;
+REGISTER_TARGET_DIR_AUTOLOAD;
         }
 
         $file .= <<<REGISTER_LOADER
@@ -630,8 +638,8 @@ REGISTER_LOADER;
         if ($useIncludeFiles) {
             $file .= <<<INCLUDE_FILES
         \$includeFiles = require __DIR__ . '/autoload_files.php';
-        foreach (\$includeFiles as \$file) {
-            composerRequire$suffix(\$file);
+        foreach (\$includeFiles as \$fileIdentifier => \$file) {
+            composerRequire$suffix(\$fileIdentifier, \$file);
         }
 
 
@@ -646,12 +654,23 @@ METHOD_FOOTER;
 
         $file .= $targetDirLoader;
 
-        return $file . <<<FOOTER
+        if ($useIncludeFiles) {
+            return $file . <<<FOOTER
 }
 
-function composerRequire$suffix(\$file)
+function composerRequire$suffix(\$fileIdentifier, \$file)
 {
-    require \$file;
+    if (empty(\$GLOBALS['__composer_autoload_files'][\$fileIdentifier])) {
+        require \$file;
+
+        \$GLOBALS['__composer_autoload_files'][\$fileIdentifier] = true;
+    }
+}
+
+FOOTER;
+        }
+
+        return $file . <<<FOOTER
 }
 
 FOOTER;
@@ -698,13 +717,35 @@ FOOTER;
                         $path = str_replace('\\*\\*', '.+?', $path);
                         $path = str_replace('\\*', '[^/]+?', $path);
 
-                        $autoloads[] = empty($installPath) ? preg_quote(strtr(getcwd(), '\\', '/')) . '/' . $path : preg_quote($installPath) . '/' . $path;
+                        // add support for up-level relative paths
+                        $updir = null;
+                        $path = preg_replace_callback(
+                            '{^((?:(?:\\\\\\.){1,2}+/)+)}',
+                            function ($matches) use (&$updir) {
+                                if (isset($matches[1])) {
+                                    // undo preg_quote for the matched string
+                                    $updir = str_replace('\\.', '.', $matches[1]);
+                                }
+
+                                return '';
+                            },
+                            $path
+                        );
+                        if (empty($installPath)) {
+                            $installPath = strtr(getcwd(), '\\', '/');
+                        }
+
+                        $resolvedPath = realpath($installPath . '/' . $updir);
+                        $autoloads[] = preg_quote(strtr($resolvedPath, '\\', '/')) . '/' . $path;
                         continue;
                     }
 
                     $relativePath = empty($installPath) ? (empty($path) ? '.' : $path) : $installPath.'/'.$path;
 
-                    if ($type === 'files' || $type === 'classmap') {
+                    if ($type === 'files') {
+                        $autoloads[$this->getFileIdentifier($package, $path)] = $relativePath;
+                        continue;
+                    } elseif ($type === 'classmap') {
                         $autoloads[] = $relativePath;
                         continue;
                     }
@@ -715,6 +756,11 @@ FOOTER;
         }
 
         return $autoloads;
+    }
+
+    protected function getFileIdentifier(PackageInterface $package, $path)
+    {
+        return md5($package->getName() . ':' . $path);
     }
 
     /**

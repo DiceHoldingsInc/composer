@@ -25,6 +25,7 @@ use Composer\Config;
 class GitDownloader extends VcsDownloader
 {
     private $hasStashedChanges = false;
+    private $hasDiscardedChanges = false;
     private $gitUtil;
 
     public function __construct(IOInterface $io, Config $config, ProcessExecutor $process = null, Filesystem $fs = null)
@@ -204,6 +205,8 @@ class GitDownloader extends VcsDownloader
                 throw new \RuntimeException("Failed to apply stashed changes:\n\n".$this->process->getErrorOutput());
             }
         }
+
+        $this->hasDiscardedChanges = false;
     }
 
     /**
@@ -218,12 +221,14 @@ class GitDownloader extends VcsDownloader
      */
     protected function updateToCommit($path, $reference, $branch, $date)
     {
+        $force = $this->hasDiscardedChanges || $this->hasStashedChanges ? '-f ' : '';
+
         // This uses the "--" sequence to separate branch from file parameters.
         //
         // Otherwise git tries the branch name as well as file name.
         // If the non-existent branch is actually the name of a file, the file
         // is checked out.
-        $template = 'git checkout %s -- && git reset --hard %1$s --';
+        $template = 'git checkout '.$force.'%s -- && git reset --hard %1$s --';
         $branch = preg_replace('{(?:^dev-|(?:\.x)?-dev$)}i', '', $branch);
 
         $branches = null;
@@ -237,7 +242,7 @@ class GitDownloader extends VcsDownloader
             && $branches
             && preg_match('{^\s+composer/'.preg_quote($reference).'$}m', $branches)
         ) {
-            $command = sprintf('git checkout -B %s %s -- && git reset --hard %2$s --', ProcessExecutor::escape($branch), ProcessExecutor::escape('composer/'.$reference));
+            $command = sprintf('git checkout '.$force.'-B %s %s -- && git reset --hard %2$s --', ProcessExecutor::escape($branch), ProcessExecutor::escape('composer/'.$reference));
             if (0 === $this->process->execute($command, $output, $path)) {
                 return;
             }
@@ -251,7 +256,7 @@ class GitDownloader extends VcsDownloader
             }
 
             $command = sprintf('git checkout %s --', ProcessExecutor::escape($branch));
-            $fallbackCommand = sprintf('git checkout -B %s %s --', ProcessExecutor::escape($branch), ProcessExecutor::escape('composer/'.$branch));
+            $fallbackCommand = sprintf('git checkout '.$force.'-B %s %s --', ProcessExecutor::escape($branch), ProcessExecutor::escape('composer/'.$branch));
             if (0 === $this->process->execute($command, $output, $path)
                 || 0 === $this->process->execute($fallbackCommand, $output, $path)
             ) {
@@ -314,6 +319,8 @@ class GitDownloader extends VcsDownloader
         if (0 !== $this->process->execute('git reset --hard', $output, $path)) {
             throw new \RuntimeException("Could not reset changes\n\n:".$this->process->getErrorOutput());
         }
+
+        $this->hasDiscardedChanges = true;
     }
 
     /**
@@ -323,7 +330,7 @@ class GitDownloader extends VcsDownloader
     protected function stashChanges($path)
     {
         $path = $this->normalizePath($path);
-        if (0 !== $this->process->execute('git stash', $output, $path)) {
+        if (0 !== $this->process->execute('git stash --include-untracked', $output, $path)) {
             throw new \RuntimeException("Could not stash changes\n\n:".$this->process->getErrorOutput());
         }
 

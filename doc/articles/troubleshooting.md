@@ -100,11 +100,14 @@ If composer shows memory errors on some commands:
 
 `PHP Fatal error:  Allowed memory size of XXXXXX bytes exhausted <...>`
 
-The PHP `memory_limit` should be increased.
+Check first that XDebug is not loaded in your `php.ini` by running
+`composer diagnose`. If XDebug is loaded, you should disable it by
+commenting the line `zend_extension=path/to/xdebug` in your `php.ini`.
+Don't forget to enable XDebug again after using Composer, if you need it.
+
+If composer still raises the error, the PHP `memory_limit` should be increased.
 
 > **Note:** Composer internally increases the `memory_limit` to `1G`.
-> If you have memory issues when using composer, please consider [creating
-> an issue ticket](https://github.com/composer/composer/issues) so we can look into it.
 
 To get the current `memory_limit` value, run:
 
@@ -125,6 +128,47 @@ Or, you can increase the limit with a command-line argument:
 ```sh
 php -d memory_limit=-1 composer.phar <...>
 ```
+
+## Xdebug impact on Composer
+
+Running Composer console commands while the php extension "xdebug" is loaded reduces speed considerably.
+This is even the case when all "xdebug" related features are disabled per php.ini flags,
+but the php extension itself is loaded into the PHP engine.
+Compared to a cli command run with "xdebug" enabled a speed improvement by a factor of up to 3 is not uncommon.
+
+> **Note:** This is a general issue when running PHP with "xdebug" enabled. You shouldn't
+> load the extension in production like environments per se.
+
+Disable "xdebug" in your `php.ini` (ex. `/etc/php5/cli/php.ini` for Debian-like systems) by
+locating the related `zend_extension` directive and prepending it with `;` (semicolon):
+
+```sh
+;zend_extension = "/path/to/my/xdebug.so"
+```
+
+If you disable this extension and still want it to be added on `php` cli command, you can deal with aliases on *nix systems:
+
+```sh
+# Load xdebug Zend extension with php command
+alias php='php -dzend_extension=xdebug.so'
+# PHPUnit needs xdebug for coverage. In this case, just make an alias with php command prefix.
+alias phpunit='php $(which phpunit)'
+```
+
+With that, all php binaries called directly **will not** have xdebug enabled
+but you will still have it by prefixing them with php command.
+
+Example:
+
+```sh
+# Will NOT have xdebug enabled
+composer update
+# Will have xdebug enabled by alias
+php /usr/local/bin/composer update
+```
+
+If you do not want to disable it and want to get rid of the warning you can also define the
+[COMPOSER_DISABLE_XDEBUG_WARN](../03-cli.md#composer-disable-xdebug-warn) environment variable.
 
 ## "The system cannot find the path specified" (Windows)
 

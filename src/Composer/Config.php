@@ -39,17 +39,20 @@ class Config
         'bin-compat' => 'auto',
         'discard-changes' => false,
         'autoloader-suffix' => null,
+        'sort-packages' => false,
         'optimize-autoloader' => false,
         'classmap-authoritative' => false,
         'prepend-autoloader' => true,
         'github-domains' => array('github.com'),
         'github-expose-hostname' => true,
+        'gitlab-domains' => array('gitlab.com'),
         'store-auths' => 'prompt',
         'platform' => array(),
         'archive-format' => 'tar',
         'archive-dir' => '.',
         // valid keys without defaults (auth config stuff):
         // github-oauth
+        // gitlab-oauth
         // http-basic
     );
 
@@ -110,7 +113,7 @@ class Config
         // override defaults with given config
         if (!empty($config['config']) && is_array($config['config'])) {
             foreach ($config['config'] as $key => $val) {
-                if (in_array($key, array('github-oauth', 'http-basic')) && isset($this->config[$key])) {
+                if (in_array($key, array('github-oauth', 'gitlab-oauth', 'http-basic')) && isset($this->config[$key])) {
                     $this->config[$key] = array_merge($this->config[$key], $val);
                 } else {
                     $this->config[$key] = $val;
